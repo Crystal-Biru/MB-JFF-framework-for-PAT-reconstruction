@@ -13,5 +13,6 @@ The MB-JFF framework consists of two main components:
 
 **🛠️ Installation**
 
-Environment Requirements \\
+Environment Requirements 
+
 Ensure you have Python 3.8+ and PyTorch installed. All dependencies are listed in requirements.txt.
