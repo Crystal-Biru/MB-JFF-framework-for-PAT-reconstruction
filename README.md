@@ -7,13 +7,10 @@ This repository contains the official implementation of the Model-Based Joint Fe
 🏗️ Framework Architecture
 
 The MB-JFF framework consists of two main components:
-
 Model-Based Module: Leverages a hybrid forward operator to provide physical guidance.
-
 Joint Feature Fusion Module: Fuses information from original and residual sinograms to refine the spatial representation.
 
 🛠️ Installation
 
 Environment Requirements
-
 Ensure you have Python 3.8+ and PyTorch installed. All dependencies are listed in requirements.txt.
