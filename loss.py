@@ -26,7 +26,7 @@ class adjoint(_Loss):
         super(adjoint, self).__init__()
         self.args = args
 
-        self.ssim_loss = SSIM()  # 添加SSIM损失
+        self.ssim_loss = SSIMLoss()  # 添加SSIM损失
 
     def forward(self, pred, gt, minmax=np.array([0, 255]), **kwargs):
 
