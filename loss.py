@@ -62,18 +62,64 @@ class forward(_Loss):
             'lut_loss': LUT_mse_loss
         }
 
-class SSIM(nn.Module):
+class SSIMLoss(nn.Module):
     def __init__(self, window_size=11, size_average=True):
-        super(SSIM, self).__init__()
+        super(SSIMLoss, self).__init__()
         self.window_size = window_size
         self.size_average = size_average
+        self.register_buffer('window', self.create_window(window_size))
+
+    def create_window(self, window_size, sigma=1.5):
+        coords = torch.arange(window_size, dtype=torch.float32) - window_size // 2
+        g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
+        g = g / g.sum()
+        _1D_window = g.unsqueeze(1)
+        _2D_window = _1D_window @ _1D_window.t()
+        window = _2D_window.unsqueeze(0).unsqueeze(0)
+        return window
+
+    def _normalize(self, x, minmax):
+        if isinstance(minmax, np.ndarray):
+            minmax = torch.from_numpy(minmax).to(x.device).to(x.dtype)
+        elif not torch.is_tensor(minmax):
+            minmax = torch.tensor(minmax, device=x.device, dtype=x.dtype)
+
+        if minmax.ndim == 1:
+            min_val = minmax[0]
+            max_val = minmax[1]
+            denom = max(max_val - min_val, 1e-6)
+            x = (x - min_val) / denom
+        else:
+            min_val = minmax[:, 0].view(-1, 1, 1, 1)
+            max_val = minmax[:, 1].view(-1, 1, 1, 1)
+            denom = torch.clamp(max_val - min_val, min=1e-6)
+            x = (x - min_val) / denom
+        return x
+
+    def ssim(self, pred, gt, window, size_average=True):
+        padding = self.window_size // 2
+        mu1 = F.conv2d(pred, window, padding=padding, groups=1)
+        mu2 = F.conv2d(gt, window, padding=padding, groups=1)
+        mu1_sq = mu1 * mu1
+        mu2_sq = mu2 * mu2
+        mu1_mu2 = mu1 * mu2
+
+        sigma1_sq = F.conv2d(pred * pred, window, padding=padding, groups=1) - mu1_sq
+        sigma2_sq = F.conv2d(gt * gt, window, padding=padding, groups=1) - mu2_sq
+        sigma12 = F.conv2d(pred * gt, window, padding=padding, groups=1) - mu1_mu2
+
+        C1 = 0.01 ** 2
+        C2 = 0.03 ** 2
+
+        ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / (
+            (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+        )
+        if size_average:
+            return ssim_map.mean()
+        return ssim_map.mean([1, 2, 3])
 
     def forward(self, pred, gt, minmax=[0, 1]):
-        batch_size = pred.size(0)
-        ssim_vals = []
-        for idx in range(batch_size):
-            ssim = calc_ssim(pred[idx, 0].detach().cpu().numpy(), 
-                             gt[idx, 0].detach().cpu().numpy(), minmax[idx])
-            ssim_vals.append(ssim)
-        ssim_vals = np.array(ssim_vals)
-        return 1 - ssim_vals.mean()
+        pred = self._normalize(pred, minmax)
+        gt = self._normalize(gt, minmax)
+        ssim_val = self.ssim(pred, gt, self.window, size_average=self.size_average)
+        return 1 - ssim_val
